@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Gestion galerie — PhotoboothLive</title>
+  <link rel="icon" href="assets/img/module-photoboothlive.svg" type="image/svg+xml">
+  <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link href="https://fonts.googleapis.com/css2?family=Inter:wght@500;650;700;800;900&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="assets/css/style.css">
+</head>
+<body>
+  <header class="header"><div class="container nav"><a class="brand" href="index.html"><span class="brand-mark">📸</span><span>PhotoboothLive</span></a><div class="nav-actions"><a id="openJoin" class="btn btn-secondary" href="#" target="_blank">Page invités</a><a id="openWall" class="btn btn-primary" href="#" target="_blank">Écran public</a></div></div></header>
+  <main class="main"><div class="container">
+    <div class="dashboard-head"><div><p class="eyebrow">Gestion organisateur</p><h1 id="title">Galerie</h1><p id="subtitle" class="lead">—</p><span id="expiredBadge" class="badge" hidden>Galerie expirée</span></div></div>
+    <section class="stat-grid"><article class="stat"><strong id="participantsCount">0</strong><span>participants</span></article><article class="stat"><strong id="pendingCount">0</strong><span>à modérer</span></article><article class="stat"><strong id="photoCount">0</strong><span>photos approuvées</span></article></section>
+    <section class="grid two">
+      <article class="card"><p class="eyebrow">Partage</p><h2>QR code invités</h2><div class="qr-card"><img id="qrImg" src="" alt="QR code vers la page invités"></div><div class="field"><label>Lien participant</label><div class="link-row"><input id="joinLink" readonly><button id="copyJoin" class="btn btn-secondary" type="button">Copier</button></div></div><div class="field"><label>Lien écran public</label><div class="link-row"><input id="wallLink" readonly><button id="copyWall" class="btn btn-secondary" type="button">Copier</button></div></div><p>Expiration prévue : <strong id="expiresAt">—</strong></p><p id="status" class="status" role="status"></p></article>
+      <article class="card"><p class="eyebrow">Paramètres</p><h2>Affichage</h2><label class="checkbox"><input id="moderationEnabled" type="checkbox"> Valider les photos avant affichage</label><button id="saveConfig" class="btn btn-primary" type="button">Enregistrer</button><p class="help">Les fichiers sont limités côté interface et côté Storage Rules. La vidéo est désactivée en v1.</p></article>
+    </section>
+    <section class="card" style="margin-top:22px"><p class="eyebrow">Modération</p><h2>Photos reçues</h2><div id="moderationList" class="photo-list"></div></section>
+    <section class="card" style="margin-top:22px"><p class="eyebrow">Galerie</p><h2>Photos approuvées</h2><div id="galleryGrid" class="gallery-grid"></div></section>
+  </div></main>
+  <script type="module" src="assets/js/session.js"></script>
+</body>
+</html>
