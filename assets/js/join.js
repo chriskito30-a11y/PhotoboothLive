@@ -114,24 +114,23 @@ $("#uploadForm")?.addEventListener("submit", async (event) => {
       createdAt: now
     };
 
+    // IMPORTANT: les invités anonymes ne doivent écrire que dans les zones publiques autorisées
+    // par les règles RTDB génériques : participants + publicWrites.
+    // La modération, gallery et stats restent réservées à l’organisateur connecté.
     await set(ref(db, `${ROOT_PATH}/${sessionId}/participants/${participantId}`), {
       id: participantId,
       name,
       joinedAt: session.participants?.[participantId]?.joinedAt || now,
       lastSeenAt: now
     });
-    await set(ref(db, `${ROOT_PATH}/${sessionId}/publicWrites/${participantId}`), item);
-    if (!session.config?.moderationEnabled) {
-      await set(ref(db, `${ROOT_PATH}/${sessionId}/gallery/${participantId}`), { ...item, status: "approved", approvedAt: now });
-    }
-    await update(ref(db, `${ROOT_PATH}/${sessionId}/stats`), {
-      participantsCount: alreadyParticipant ? participantsCount : participantsCount + 1,
-      photosCount: countObject(session.publicWrites || {}) + 1,
-      updatedAt: now
+    await set(ref(db, `${ROOT_PATH}/${sessionId}/publicWrites/${participantId}`), {
+      ...item,
+      status: "pending"
     });
+
     form.reset();
     $("#preview").hidden = true;
-    setStatus(session.config?.moderationEnabled ? "Photo envoyée. Elle apparaîtra après validation." : "Photo envoyée. Merci !", "success");
+    setStatus("Photo envoyée. Elle apparaîtra après validation par l’organisateur.", "success");
   } catch (error) {
     console.warn(error);
     setStatus(error.message || "Envoi impossible.", "error");

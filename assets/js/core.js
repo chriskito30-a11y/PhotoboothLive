@@ -178,7 +178,6 @@ export async function approvePhoto(sessionId, item) {
     [`gallery/${id}`]: { ...item, id, status: "approved", approvedAt: now },
     [`publicWrites/${id}/status`]: "approved",
     [`publicWrites/${id}/approvedAt`]: now,
-    "stats/approvedCount": Date.now(),
     updatedAt: now
   });
 }
