@@ -94,6 +94,18 @@ $("#uploadForm")?.addEventListener("submit", async (event) => {
     if (!alreadyParticipant && participantsCount >= limit) throw new Error("La limite de participants est atteinte pour cette galerie.");
     if (session.publicWrites?.[participantId] || session.gallery?.[participantId]) throw new Error("Vous avez déjà envoyé une photo pour cette galerie.");
 
+    const now = Date.now();
+
+    // IMPORTANT QUOTA : on réserve d’abord le participant dans RTDB.
+    // Les règles RTDB peuvent compter les participants/photos, contrairement aux règles Storage.
+    // Si la limite 30 est atteinte, l’écriture échoue AVANT l’upload Storage : pas de fichier inutile.
+    await set(ref(db, `${ROOT_PATH}/${sessionId}/participants/${participantId}`), {
+      id: participantId,
+      name,
+      joinedAt: session.participants?.[participantId]?.joinedAt || now,
+      lastSeenAt: now
+    });
+
     setStatus("Envoi de la photo…");
     const path = `photoboothlive/${sessionId}/${participantId}/photo.jpg`;
     const fileRef = storageRef(storage, path);
@@ -102,7 +114,6 @@ $("#uploadForm")?.addEventListener("submit", async (event) => {
       customMetadata: { moduleId: "photoboothlive", sessionId, participantId }
     });
     const imageUrl = await getDownloadURL(fileRef);
-    const now = Date.now();
     const item = {
       id: participantId,
       participantId,
@@ -110,23 +121,12 @@ $("#uploadForm")?.addEventListener("submit", async (event) => {
       imageUrl,
       storagePath: path,
       message,
-      status: session.config?.moderationEnabled ? "pending" : "approved",
+      status: "pending",
       createdAt: now
     };
 
-    // IMPORTANT: les invités anonymes ne doivent écrire que dans les zones publiques autorisées
-    // par les règles RTDB génériques : participants + publicWrites.
-    // La modération, gallery et stats restent réservées à l’organisateur connecté.
-    await set(ref(db, `${ROOT_PATH}/${sessionId}/participants/${participantId}`), {
-      id: participantId,
-      name,
-      joinedAt: session.participants?.[participantId]?.joinedAt || now,
-      lastSeenAt: now
-    });
-    await set(ref(db, `${ROOT_PATH}/${sessionId}/publicWrites/${participantId}`), {
-      ...item,
-      status: "pending"
-    });
+    // L’invité écrit uniquement sa soumission. L’organisateur seul approuve vers gallery.
+    await set(ref(db, `${ROOT_PATH}/${sessionId}/publicWrites/${participantId}`), item);
 
     form.reset();
     $("#preview").hidden = true;
