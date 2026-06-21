@@ -1,0 +1,122 @@
+import { db, ref, onValue, update } from "./firebase-config.js";
+import { enforceModuleAccess } from "./modulys-access.js";
+import { $, escapeHtml, formatDateTime, getSessionIdFromUrl, publicUrl, qrUrl, isExpired, galleryItems, approvePhoto, rejectPhoto, MODULE_ID, ROOT_PATH } from "./core.js";
+
+const sessionId = getSessionIdFromUrl();
+let sessionData = null;
+let currentUser = null;
+
+function setStatus(message = "", type = "") {
+  const el = $("#status");
+  if (!el) return;
+  el.textContent = message;
+  el.className = `status ${type}`.trim();
+}
+
+async function boot() {
+  const result = await enforceModuleAccess(MODULE_ID, { mode: "hard" });
+  if (!result.ok) return;
+  currentUser = result.user;
+  if (!sessionId) {
+    document.body.innerHTML = `<main class="access-screen"><section class="access-card"><h1>Session introuvable</h1><a class="btn btn-primary" href="index.html">Retour</a></section></main>`;
+    return;
+  }
+  onValue(ref(db, `${ROOT_PATH}/${sessionId}`), (snap) => {
+    const session = snap.val();
+    if (!session) {
+      document.body.innerHTML = `<main class="access-screen"><section class="access-card"><h1>Galerie introuvable</h1><a class="btn btn-primary" href="index.html">Retour</a></section></main>`;
+      return;
+    }
+    if (session.ownerUid !== currentUser.uid) {
+      document.body.innerHTML = `<main class="access-screen"><section class="access-card"><h1>Accès réservé à l’organisateur</h1><a class="btn btn-primary" href="index.html">Retour</a></section></main>`;
+      return;
+    }
+    sessionData = session;
+    render(session);
+  });
+}
+
+function render(session) {
+  const join = publicUrl("join.html", sessionId);
+  const wall = publicUrl("wall.html", sessionId);
+  $("#title").textContent = session.config?.title || "PhotoboothLive";
+  $("#subtitle").textContent = session.config?.subtitle || "Galerie photo collaborative";
+  $("#expiresAt").textContent = formatDateTime(session.expiresAt);
+  $("#joinLink").value = join;
+  $("#wallLink").value = wall;
+  $("#qrImg").src = qrUrl(join, 280);
+  $("#openJoin").href = join;
+  $("#openWall").href = wall;
+  $("#expiredBadge").hidden = !isExpired(session);
+
+  const publicWrites = Object.values(session.publicWrites || {}).sort((a, b) => Number(b.createdAt || 0) - Number(a.createdAt || 0));
+  const pending = publicWrites.filter((item) => item.status !== "approved" && item.status !== "rejected");
+  $("#pendingCount").textContent = String(pending.length);
+  $("#photoCount").textContent = String(Object.keys(session.gallery || {}).length);
+  $("#participantsCount").textContent = String(Object.keys(session.participants || {}).length);
+
+  const moderation = $("#moderationList");
+  if (!publicWrites.length) {
+    moderation.innerHTML = `<article class="empty-card"><strong>Aucune photo reçue</strong><span>Partagez le QR code avec vos invités.</span></article>`;
+  } else {
+    moderation.innerHTML = publicWrites.map((item) => renderModerationItem(item, session.config?.moderationEnabled)).join("");
+  }
+
+  const gallery = galleryItems(session, false);
+  const grid = $("#galleryGrid");
+  grid.innerHTML = gallery.length ? gallery.map(renderGalleryItem).join("") : `<article class="empty-card"><strong>Galerie vide</strong><span>Les photos approuvées apparaîtront ici.</span></article>`;
+}
+
+function renderModerationItem(item, moderationEnabled) {
+  const status = item.status || (moderationEnabled ? "pending" : "approved");
+  return `<article class="photo-card" data-id="${escapeHtml(item.id)}">
+    <img src="${escapeHtml(item.imageUrl)}" alt="Photo envoyée par ${escapeHtml(item.participantName || "un invité")}">
+    <div class="photo-body">
+      <strong>${escapeHtml(item.participantName || "Invité")}</strong>
+      <span>${escapeHtml(item.message || "Sans message")}</span>
+      <small>Statut : ${escapeHtml(status)}</small>
+      <div class="photo-actions">
+        <button class="btn btn-primary" type="button" data-approve="${escapeHtml(item.id)}">Approuver</button>
+        <button class="btn btn-secondary" type="button" data-reject="${escapeHtml(item.id)}">Refuser</button>
+      </div>
+    </div>
+  </article>`;
+}
+
+function renderGalleryItem(item) {
+  return `<figure class="gallery-tile"><img src="${escapeHtml(item.imageUrl)}" alt="Photo de ${escapeHtml(item.participantName || "invité")}"><figcaption><strong>${escapeHtml(item.participantName || "Invité")}</strong><span>${escapeHtml(item.message || "")}</span></figcaption></figure>`;
+}
+
+document.addEventListener("click", async (event) => {
+  const approveId = event.target?.dataset?.approve;
+  const rejectId = event.target?.dataset?.reject;
+  if (!approveId && !rejectId) return;
+  const item = sessionData?.publicWrites?.[approveId || rejectId];
+  if (!item) return;
+  try {
+    if (approveId) await approvePhoto(sessionId, item);
+    if (rejectId) await rejectPhoto(sessionId, rejectId);
+  } catch (error) {
+    setStatus(error.message || "Action impossible.", "error");
+  }
+});
+
+$("#copyJoin")?.addEventListener("click", async () => {
+  await navigator.clipboard.writeText($("#joinLink").value);
+  setStatus("Lien participant copié.", "success");
+});
+$("#copyWall")?.addEventListener("click", async () => {
+  await navigator.clipboard.writeText($("#wallLink").value);
+  setStatus("Lien écran copié.", "success");
+});
+$("#saveConfig")?.addEventListener("click", async () => {
+  if (!sessionData) return;
+  const moderationEnabled = $("#moderationEnabled").checked;
+  await update(ref(db, `${ROOT_PATH}/${sessionId}`), {
+    "config/moderationEnabled": moderationEnabled,
+    updatedAt: Date.now()
+  });
+  setStatus("Paramètres enregistrés.", "success");
+});
+
+boot();

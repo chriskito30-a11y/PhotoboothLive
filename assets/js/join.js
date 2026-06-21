@@ -1,0 +1,141 @@
+import { app, db, storage, ref, get, set, update, storageRef, uploadBytes, getDownloadURL } from "./firebase-config.js";
+import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-auth.js";
+import { $, escapeHtml, getSessionIdFromUrl, isExpired, countObject, ROOT_PATH } from "./core.js";
+import { compressImage } from "./image-tools.js";
+
+const auth = getAuth(app);
+const sessionId = getSessionIdFromUrl();
+let sessionData = null;
+let participantId = null;
+let selectedBlob = null;
+
+function setStatus(message = "", type = "") {
+  const el = $("#status");
+  if (!el) return;
+  el.textContent = message;
+  el.className = `status ${type}`.trim();
+}
+
+function waitForUser() {
+  return new Promise((resolve) => {
+    const unsub = onAuthStateChanged(auth, (user) => {
+      unsub();
+      resolve(user);
+    });
+  });
+}
+
+async function ensureAnonUser() {
+  if (!auth.currentUser) {
+    try { await signInAnonymously(auth); } catch (error) {
+      throw new Error("L’envoi nécessite l’authentification anonyme Firebase. Activez-la dans Firebase Auth > Sign-in method.");
+    }
+  }
+  const user = auth.currentUser || await waitForUser();
+  participantId = user.uid;
+  return user;
+}
+
+async function boot() {
+  if (!sessionId) return renderUnavailable("Lien incomplet : session manquante.");
+  await ensureAnonUser();
+  const snap = await get(ref(db, `${ROOT_PATH}/${sessionId}`));
+  sessionData = snap.val();
+  if (!sessionData) return renderUnavailable("Cette galerie n’existe pas ou n’est plus disponible.");
+  if (isExpired(sessionData)) return renderUnavailable("Cette galerie est expirée. Les envois sont fermés.");
+  renderSession(sessionData);
+}
+
+function renderUnavailable(message) {
+  document.body.innerHTML = `<main class="access-screen"><section class="access-card"><p class="eyebrow">PhotoboothLive</p><h1>Galerie indisponible</h1><p>${escapeHtml(message)}</p></section></main>`;
+}
+
+function renderSession(session) {
+  $("#title").textContent = session.config?.title || "PhotoboothLive";
+  $("#subtitle").textContent = session.config?.subtitle || "Partagez vos souvenirs";
+  $("#welcomeMessage").textContent = session.config?.welcomeMessage || "Ajoutez votre photo et un petit message.";
+  $("#limitsText").textContent = `1 photo par participant · ${Math.round(Number(session.config?.maxPhotoSizeBytes || 900000) / 1000)} Ko max après compression`;
+}
+
+$("#photoFile")?.addEventListener("change", async (event) => {
+  const file = event.target.files?.[0];
+  selectedBlob = null;
+  if (!file) return;
+  setStatus("Compression de la photo…");
+  try {
+    selectedBlob = await compressImage(file, {
+      maxBytes: Number(sessionData?.config?.maxPhotoSizeBytes || 900000),
+      maxSide: 1600
+    });
+    $("#preview").src = URL.createObjectURL(selectedBlob);
+    $("#preview").hidden = false;
+    setStatus(`Photo prête (${Math.round(selectedBlob.size / 1024)} Ko).`, "success");
+  } catch (error) {
+    setStatus(error.message || "Photo impossible à compresser.", "error");
+  }
+});
+
+$("#uploadForm")?.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const form = event.currentTarget;
+  const name = form.name.value.trim().slice(0, 80);
+  const message = form.message.value.trim().slice(0, 180);
+  if (!name) return setStatus("Indiquez votre prénom.", "error");
+  if (!selectedBlob) return setStatus("Choisissez une photo.", "error");
+
+  try {
+    setStatus("Vérification des limites…");
+    const freshSnap = await get(ref(db, `${ROOT_PATH}/${sessionId}`));
+    const session = freshSnap.val();
+    if (!session || isExpired(session)) throw new Error("La galerie est fermée.");
+    const participantsCount = countObject(session.participants || {});
+    const limit = Number(session.config?.participantsLimit || 30);
+    const alreadyParticipant = Boolean(session.participants?.[participantId]);
+    if (!alreadyParticipant && participantsCount >= limit) throw new Error("La limite de participants est atteinte pour cette galerie.");
+    if (session.publicWrites?.[participantId] || session.gallery?.[participantId]) throw new Error("Vous avez déjà envoyé une photo pour cette galerie.");
+
+    setStatus("Envoi de la photo…");
+    const path = `photoboothlive/${sessionId}/${participantId}/photo.jpg`;
+    const fileRef = storageRef(storage, path);
+    await uploadBytes(fileRef, selectedBlob, {
+      contentType: "image/jpeg",
+      customMetadata: { moduleId: "photoboothlive", sessionId, participantId }
+    });
+    const imageUrl = await getDownloadURL(fileRef);
+    const now = Date.now();
+    const item = {
+      id: participantId,
+      participantId,
+      participantName: name,
+      imageUrl,
+      storagePath: path,
+      message,
+      status: session.config?.moderationEnabled ? "pending" : "approved",
+      createdAt: now
+    };
+
+    await set(ref(db, `${ROOT_PATH}/${sessionId}/participants/${participantId}`), {
+      id: participantId,
+      name,
+      joinedAt: session.participants?.[participantId]?.joinedAt || now,
+      lastSeenAt: now
+    });
+    await set(ref(db, `${ROOT_PATH}/${sessionId}/publicWrites/${participantId}`), item);
+    if (!session.config?.moderationEnabled) {
+      await set(ref(db, `${ROOT_PATH}/${sessionId}/gallery/${participantId}`), { ...item, status: "approved", approvedAt: now });
+    }
+    await update(ref(db, `${ROOT_PATH}/${sessionId}/stats`), {
+      participantsCount: alreadyParticipant ? participantsCount : participantsCount + 1,
+      photosCount: countObject(session.publicWrites || {}) + 1,
+      updatedAt: now
+    });
+    form.reset();
+    $("#preview").hidden = true;
+    setStatus(session.config?.moderationEnabled ? "Photo envoyée. Elle apparaîtra après validation." : "Photo envoyée. Merci !", "success");
+  } catch (error) {
+    console.warn(error);
+    setStatus(error.message || "Envoi impossible.", "error");
+  }
+});
+
+boot();
