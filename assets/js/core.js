@@ -84,8 +84,19 @@ export function sessionLimitsForPlan(planId = "free", moduleLimits = {}) {
   };
 }
 
+
+export function makeAllowedSlots(limit = 30) {
+  const max = Math.max(1, Math.min(Number(limit || 30), 75));
+  const slots = {};
+  for (let i = 1; i <= max; i += 1) {
+    slots[String(i).padStart(2, "0")] = true;
+  }
+  return slots;
+}
+
 export async function createSession({ user, access, title, subtitle, eventDate, welcomeMessage, moderationEnabled }) {
   if (!user) throw new Error("Utilisateur non connecté.");
+  if (user.isAnonymous) throw new Error("Connectez-vous avec votre compte Modulys pour créer une galerie.");
   const planId = access?.planId || "free";
   const moduleData = access?.module || {};
   const limits = access?.unlimited ? {
@@ -129,6 +140,7 @@ export async function createSession({ user, access, title, subtitle, eventDate, 
       welcomeMessage: String(welcomeMessage || "Scannez le QR code, ajoutez votre photo et laissez un message souvenir.").slice(0, 260),
       eventDate: eventDate || "",
       participantsLimit: Number(limits.participantsPerEvent || 30),
+      allowedSlots: makeAllowedSlots(Number(limits.participantsPerEvent || 30)),
       photosPerParticipant: Number(limits.photosPerParticipant || 1),
       maxPhotoSizeBytes: Number(limits.maxPhotoSizeBytes || 900000),
       retentionHours,

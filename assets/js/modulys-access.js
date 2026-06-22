@@ -74,6 +74,7 @@ export async function getAccessForUser(moduleKey, user) {
   if (moduleData.active === false) return { allowed: false, reason: "module_inactive", module: moduleData };
   if (moduleData.accessMode === "public") return { allowed: true, reason: "public", module: moduleData };
   if (!user) return { allowed: false, reason: "not_authenticated", module: moduleData };
+  if (user.isAnonymous) return { allowed: false, reason: "anonymous_not_allowed", module: moduleData };
 
   const [adminsSnap, adminSnap, accessSnap, subscriptionSnap, freePlanSnap] = await Promise.all([
     get(ref(db, `admins/${user.uid}`)),
@@ -143,6 +144,7 @@ export function renderFreeLimitUpgrade(target, moduleKey, error = {}) {
 function reasonLabel(reason) {
   return {
     not_authenticated: "Vous devez vous connecter avec votre compte Modulys pour ouvrir ce module.",
+    anonymous_not_allowed: "Vous utilisez actuellement une session invité. Connectez-vous avec votre vrai compte Modulys pour créer ou gérer une galerie.",
     module_not_declared: "PhotoboothLive n’est pas encore déclaré dans Firebase.",
     module_inactive: "PhotoboothLive est actuellement désactivé.",
     no_grant: "Votre compte ne possède pas encore les droits pour ce module."
