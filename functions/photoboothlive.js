@@ -367,6 +367,9 @@ export const reservePhotoboothSlot = onCall(CALLABLE_OPTIONS, async (request) =>
 
   if (!result.committed || !outcome) {
     if (failure === "capacity") throw new HttpsError("resource-exhausted", "La limite de participants est atteinte.");
+    if (failure === "missing") throw new HttpsError("not-found", "Galerie introuvable.");
+    if (failure === "expired") throw new HttpsError("failed-precondition", "Galerie expirée.");
+    if (failure === "invalid_config") throw new HttpsError("failed-precondition", "Configuration de galerie incomplète ou invalide.");
     throw new HttpsError("failed-precondition", "Galerie expirée ou indisponible.");
   }
   return outcome;
@@ -389,10 +392,14 @@ export const finalizePhotoboothUpload = onCall(CALLABLE_OPTIONS, async (request)
   const db = getDatabase();
   return withLease(db, `serverLocks/${MODULE_ID}/uploads/${sessionId}/${participantId}`, UPLOAD_LEASE_MS, async ({ lockRef, token }) => {
     const sessionRef = db.ref(`${SESSIONS_PATH}/${sessionId}`);
-    const [expirySnap, pathSnap, sizeSnap, anchorSnap, slotSnap, writeSnap, gallerySnap] = await Promise.all([
+    const [expirySnap, publicExpirySnap, configExpirySnap, pathSnap, publicPathSnap, sizeSnap, publicSizeSnap, anchorSnap, slotSnap, writeSnap, gallerySnap] = await Promise.all([
       sessionRef.child("expiresAt").get(),
+      sessionRef.child("public/expiresAt").get(),
+      sessionRef.child("config/expiresAt").get(),
       sessionRef.child("storagePath").get(),
+      sessionRef.child("public/storagePath").get(),
       sessionRef.child("config/maxPhotoSizeBytes").get(),
+      sessionRef.child("public/maxPhotoSizeBytes").get(),
       sessionRef.child("retentionAnchorAt").get(),
       sessionRef.child(`slots/${slotId}`).get(),
       sessionRef.child(`publicWrites/${participantId}`).get(),
@@ -400,13 +407,14 @@ export const finalizePhotoboothUpload = onCall(CALLABLE_OPTIONS, async (request)
     ]);
     if (writeSnap.exists() || gallerySnap.exists()) return { item: writeSnap.val() || gallerySnap.val() };
     const now = Date.now();
-    if (Number(expirySnap.val() || 0) <= now) throw new HttpsError("failed-precondition", "Galerie expirée ou indisponible.");
+    const expiresAt = Number(expirySnap.val() || publicExpirySnap.val() || configExpirySnap.val() || 0);
+    if (expiresAt <= now) throw new HttpsError("failed-precondition", "Galerie expirée ou indisponible.");
     const slot = slotSnap.val();
     if (!slot || slot.participantId !== participantId) throw new HttpsError("permission-denied", "Créneau participant invalide.");
     const reservationExpiresAt = Number(slot.reservationExpiresAt || Number(slot.createdAt || 0) + SLOT_RESERVATION_MS);
     if (!slot.finalizedAt && reservationExpiresAt <= now) throw new HttpsError("failed-precondition", "Réservation expirée. Recommencez l’envoi.");
 
-    const maxPhotoSizeBytes = requireSafeInteger(sizeSnap.val(), "Taille de photo", { min: 1, max: 1_000_000 });
+    const maxPhotoSizeBytes = requireSafeInteger(sizeSnap.val() || publicSizeSnap.val(), "Taille de photo", { min: 1, max: 1_000_000 });
     if (photoBase64.length % 4 !== 0 || photoBase64.length > Math.ceil(maxPhotoSizeBytes / 3) * 4 + 4 || !/^[A-Za-z0-9+/]+={0,2}$/.test(photoBase64)) {
       throw new HttpsError("invalid-argument", "Photo encodée invalide.");
     }
@@ -415,7 +423,7 @@ export const finalizePhotoboothUpload = onCall(CALLABLE_OPTIONS, async (request)
       throw new HttpsError("invalid-argument", "Le fichier doit être un JPEG valide dans la limite de l’offre.");
     }
 
-    const storageRoot = String(pathSnap.val() || "");
+    const storageRoot = String(pathSnap.val() || publicPathSnap.val() || "");
     if (!storageRoot.match(/^photoboothlive-(24|48|72)h\/[a-z0-9-]{6,48}$/)) {
       throw new HttpsError("failed-precondition", "Chemin Storage invalide.");
     }
