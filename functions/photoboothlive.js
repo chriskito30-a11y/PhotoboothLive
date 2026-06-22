@@ -406,7 +406,7 @@ export const finalizePhotoboothUpload = onCall(CALLABLE_OPTIONS, async (request)
       sessionRef.child(`publicWrites/${participantId}`).get(),
       sessionRef.child(`gallery/${participantId}`).get()
     ]);
-    if (writeSnap.exists() || gallerySnap.exists()) return { item: writeSnap.val() || gallerySnap.val() };
+    if (writeSnap.exists() || gallerySnap.exists()) return { item: writeSnap.val() || gallerySnap.val(), alreadySubmitted: true };
     const now = Date.now();
     const expiresAt = Number(expirySnap.val() || publicExpirySnap.val() || configExpirySnap.val() || 0);
     if (expiresAt <= now) throw new HttpsError("failed-precondition", "Galerie expirée ou indisponible.");
@@ -458,62 +458,64 @@ export const finalizePhotoboothUpload = onCall(CALLABLE_OPTIONS, async (request)
 
     await assertLease(lockRef, token);
     const imageUrl = `https://firebasestorage.googleapis.com/v0/b/${encodeURIComponent(bucket.name)}/o/${encodeURIComponent(expectedPath)}?alt=media&token=${encodeURIComponent(downloadToken)}`;
-    let existingItem = null;
-    let abortReason = "unavailable";
-    const result = await sessionRef.transaction((session) => {
-      existingItem = null;
-      abortReason = "unavailable";
+
+    try {
+      const freshSnap = await sessionRef.get();
+      const session = freshSnap.val() || null;
       const committedAt = Date.now();
-      if (!session || Number(session.expiresAt || 0) <= committedAt) return;
-      if (session.publicWrites?.[participantId] || session.gallery?.[participantId]) {
-        existingItem = session.publicWrites?.[participantId] || session.gallery?.[participantId];
-        abortReason = "existing";
-        return;
+      const freshExpiresAt = Number(session?.expiresAt || session?.public?.expiresAt || session?.config?.expiresAt || 0);
+      if (!session || !Number.isFinite(freshExpiresAt) || freshExpiresAt <= committedAt) {
+        throw new HttpsError("failed-precondition", "Galerie expirée.");
       }
+
+      const existingItem = session.publicWrites?.[participantId] || session.gallery?.[participantId] || null;
+      if (existingItem) return { item: existingItem, alreadySubmitted: true };
+
       const currentSlot = session.slots?.[slotId];
       if (!currentSlot || currentSlot.participantId !== participantId) {
-        abortReason = "slot";
-        return;
+        throw new HttpsError("permission-denied", "Créneau participant invalide.");
       }
+
       const currentReservationExpiry = Number(currentSlot.reservationExpiresAt || Number(currentSlot.createdAt || 0) + SLOT_RESERVATION_MS);
       if (!currentSlot.finalizedAt && currentReservationExpiry <= committedAt) {
-        abortReason = "reservation";
-        return;
+        throw new HttpsError("failed-precondition", "Réservation expirée. Recommencez l’envoi.");
       }
 
       const autoApprove = session.config?.moderationEnabled === false;
       const status = autoApprove ? "approved" : "pending";
       const item = { id: participantId, slotId, participantId, participantName, imageUrl, storagePath: expectedPath, message, status, createdAt: committedAt };
-      session.participants ||= {};
-      session.publicWrites ||= {};
-      session.gallery ||= {};
-      session.stats ||= {};
-      session.participants[participantId] = { id: participantId, slotId, name: participantName, joinedAt: committedAt, lastSeenAt: committedAt };
-      session.publicWrites[participantId] = item;
-      if (autoApprove) session.gallery[participantId] = { ...item, approvedAt: committedAt };
-      session.slots[slotId] = { ...currentSlot, finalizedAt: committedAt };
-      delete session.slots[slotId].reservationExpiresAt;
-      session.stats.participantsCount = Object.keys(session.participants).length;
-      session.stats.photosCount = Object.keys(session.publicWrites).length;
-      session.stats.approvedCount = Object.keys(session.gallery).length;
-      session.stats.pendingCount = Object.values(session.publicWrites).filter((entry) => entry?.status === "pending").length;
-      session.updatedAt = committedAt;
-      existingItem = item;
-      return session;
-    }, undefined, false);
+      const slotUpdate = { ...currentSlot, finalizedAt: committedAt };
+      delete slotUpdate.reservationExpiresAt;
 
-    if (!result.committed) {
-      if (abortReason === "existing" && existingItem) return { item: existingItem };
+      const participants = { ...(session.participants || {}) };
+      const publicWrites = { ...(session.publicWrites || {}) };
+      const gallery = { ...(session.gallery || {}) };
+      participants[participantId] = { id: participantId, slotId, name: participantName, joinedAt: committedAt, lastSeenAt: committedAt };
+      publicWrites[participantId] = item;
+      if (autoApprove) gallery[participantId] = { ...item, approvedAt: committedAt };
+
+      const updates = {
+        [`participants/${participantId}`]: participants[participantId],
+        [`publicWrites/${participantId}`]: item,
+        [`slots/${slotId}`]: slotUpdate,
+        "stats/participantsCount": Object.keys(participants).length,
+        "stats/photosCount": Object.keys(publicWrites).length,
+        "stats/approvedCount": Object.keys(gallery).length,
+        "stats/pendingCount": Object.values(publicWrites).filter((entry) => entry?.status === "pending").length,
+        updatedAt: committedAt
+      };
+      if (autoApprove) updates[`gallery/${participantId}`] = gallery[participantId];
+
+      await sessionRef.update(updates);
+      return { item };
+    } catch (error) {
       try {
         await file.delete({ ignoreNotFound: true });
-      } catch (error) {
-        console.error("Photobooth orphan cleanup failed", { expectedPath, error });
+      } catch (cleanupError) {
+        console.error("Photobooth orphan cleanup failed", { expectedPath, cleanupError });
       }
-      if (abortReason === "slot") throw new HttpsError("permission-denied", "Créneau participant invalide.");
-      if (abortReason === "reservation") throw new HttpsError("failed-precondition", "Réservation expirée. Recommencez l’envoi.");
-      throw new HttpsError("failed-precondition", "Galerie expirée ou indisponible.");
+      throw error;
     }
-    return { item: existingItem };
   });
 });
 
