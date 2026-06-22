@@ -2,6 +2,7 @@
   "rule": [
     {
       "action": { "type": "Delete" },
+<<<<<<< HEAD
       "condition": { "daysSinceCustomTime": 1, "matchesPrefix": ["photoboothlive-24h/"] }
     },
     {
@@ -19,6 +20,12 @@
     {
       "action": { "type": "Delete" },
       "condition": { "age": 370, "matchesPrefix": ["photoboothlive-24h/", "photoboothlive-48h/", "photoboothlive-72h/"] }
+=======
+      "condition": {
+        "age": 2,
+        "matchesPrefix": ["photoboothlive/"]
+      }
+>>>>>>> 16228d0d8b510496f3be0d8b7ce8f50394c9c595
     }
   ]
 }

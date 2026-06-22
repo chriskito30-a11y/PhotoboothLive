@@ -18,15 +18,24 @@ async function boot() {
   currentUser = result.user;
   currentAccess = result.access;
   $("#userEmail").textContent = currentUser?.email || "Compte connecté";
+<<<<<<< HEAD
   $("#planLabel").textContent = currentAccess?.plan?.name || (currentAccess?.unlimited ? "Administrateur" : currentAccess?.planId || "Gratuit");
+=======
+  $("#planLabel").textContent = currentAccess?.unlimited ? "Illimité" : "Gratuit";
+>>>>>>> 16228d0d8b510496f3be0d8b7ce8f50394c9c595
 
   loadSessions();
 }
 
 async function loadSessions() {
+<<<<<<< HEAD
   const { db, ref, get, query, orderByChild, equalTo } = await import("./firebase-config.js");
   const ownerSessions = query(ref(db, `moduleData/${MODULE_ID}/sessions`), orderByChild("ownerUid"), equalTo(currentUser.uid));
   const snap = await get(ownerSessions);
+=======
+  const { db, ref, get } = await import("./firebase-config.js");
+  const snap = await get(ref(db, `moduleData/${MODULE_ID}/sessions`));
+>>>>>>> 16228d0d8b510496f3be0d8b7ce8f50394c9c595
   const sessions = Object.entries(snap.val() || {})
     .filter(([, session]) => session.ownerUid === currentUser.uid)
     .sort((a, b) => Number(b[1].createdAt || 0) - Number(a[1].createdAt || 0));
