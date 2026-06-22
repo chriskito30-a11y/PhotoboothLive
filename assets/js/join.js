@@ -119,21 +119,10 @@ $("#uploadForm")?.addEventListener("submit", async (event) => {
     setStatus("Vérification des limites…");
     const session = await getPublicSession(sessionId);
     if (!session || isExpired(session)) throw new Error("La galerie est fermée.");
-    const [participantSnap, writeSnap, gallerySnap] = await Promise.all([
-      get(ref(db, `${ROOT_PATH}/${sessionId}/participants/${participantId}`)),
-      get(ref(db, `${ROOT_PATH}/${sessionId}/publicWrites/${participantId}`)),
-      get(ref(db, `${ROOT_PATH}/${sessionId}/gallery/${participantId}`))
-    ]);
-    if (writeSnap.exists() || gallerySnap.exists()) throw new Error("Vous avez déjà envoyé une photo pour cette galerie.");
 
-    const existingParticipant = participantSnap.val();
-    let reservedSlotId = existingParticipant?.slotId || "";
-
-    // Sécurité quota : on réserve une place numérotée avant tout upload Storage.
-    // Les rules RTDB n’autorisent que les slots précréés pour l’offre de la session.
-    if (!reservedSlotId) {
-      reservedSlotId = await reserveSlot();
-    }
+    // P0 sécurisé : le navigateur ne lit/écrit plus les nœuds privés pour pré-vérifier.
+    // La réservation, l’anti-doublon et les quotas sont contrôlés par les Cloud Functions.
+    const reservedSlotId = await reserveSlot();
 
     setStatus("Envoi sécurisé de la photo…");
     const photoBase64 = await blobToBase64(selectedBlob);

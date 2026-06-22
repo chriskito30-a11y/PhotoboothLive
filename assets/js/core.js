@@ -67,42 +67,27 @@ export function isExpired(session = {}) {
 }
 
 export async function getPublicSession(sessionId) {
-  const base = `${ROOT_PATH}/${sessionId}`;
-  const publicSnap = await get(ref(db, `${base}/public`));
-  if (publicSnap.exists()) {
-    const publicData = publicSnap.val() || {};
-    return {
-      public: publicData,
-      expiresAt: publicData.expiresAt,
-      storagePath: publicData.storagePath,
-      config: { ...publicData }
-    };
-  }
-
-  const fields = [
-    "expiresAt",
-    "storagePath",
-    "config/title",
-    "config/subtitle",
-    "config/welcomeMessage",
-    "config/participantsLimit",
-    "config/maxPhotoSizeBytes",
-    "config/retentionHours"
-  ];
-  const snapshots = await Promise.all(fields.map((path) => get(ref(db, `${base}/${path}`))));
-  if (!snapshots.some((snap) => snap.exists())) return null;
-  const values = Object.fromEntries(fields.map((path, index) => [path, snapshots[index].val()]));
+  const callable = httpsCallable(functions, "getPhotoboothPublicSession");
+  const result = await callable({ sessionId });
+  const data = result.data || {};
   return {
-    expiresAt: values.expiresAt,
-    storagePath: values.storagePath || `${MODULE_ID}/${sessionId}`,
-    config: {
-      title: values["config/title"],
-      subtitle: values["config/subtitle"],
-      welcomeMessage: values["config/welcomeMessage"],
-      participantsLimit: values["config/participantsLimit"],
-      maxPhotoSizeBytes: values["config/maxPhotoSizeBytes"],
-      retentionHours: values["config/retentionHours"]
-    }
+    public: data.config || {},
+    expiresAt: data.expiresAt,
+    storagePath: data.storagePath,
+    config: { ...(data.config || {}) }
+  };
+}
+
+export async function getWallState(sessionId) {
+  const callable = httpsCallable(functions, "getPhotoboothWallState");
+  const result = await callable({ sessionId });
+  const data = result.data || {};
+  return {
+    public: data.config || {},
+    expiresAt: data.expiresAt,
+    storagePath: data.storagePath,
+    config: { ...(data.config || {}) },
+    gallery: Array.isArray(data.gallery) ? data.gallery : []
   };
 }
 

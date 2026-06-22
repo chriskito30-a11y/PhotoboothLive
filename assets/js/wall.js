@@ -1,37 +1,35 @@
-import { db, ref, onValue } from "./firebase-config.js";
-import { $, escapeHtml, getSessionIdFromUrl, getPublicSession, publicUrl, qrUrl, isExpired, ROOT_PATH } from "./core.js";
+import { $, escapeHtml, getSessionIdFromUrl, getWallState, publicUrl, qrUrl, isExpired } from "./core.js";
 
 const sessionId = getSessionIdFromUrl();
 let currentIndex = 0;
 let items = [];
 let publicSession = null;
 let expiryTimer = 0;
+let refreshTimer = 0;
 
 async function boot() {
   if (!sessionId) return renderUnavailable("Session manquante.");
-  publicSession = await getPublicSession(sessionId);
-  if (!publicSession) return renderUnavailable("Galerie introuvable.");
-  renderMetadata(publicSession);
-  const hasPublicNode = Boolean(publicSession.public);
-
-  const handleReadDenied = () => renderUnavailable("Galerie expirée ou indisponible.");
-  onValue(ref(db, `${ROOT_PATH}/${sessionId}/public`), (snap) => {
-    if (!snap.exists()) {
-      if (hasPublicNode) renderUnavailable("Galerie introuvable.");
-      return;
-    }
-    const data = snap.val() || {};
-    publicSession = { public: data, config: data, expiresAt: data.expiresAt, storagePath: data.storagePath };
-    renderMetadata(publicSession);
-  }, handleReadDenied);
-  onValue(ref(db, `${ROOT_PATH}/${sessionId}/gallery`), (snap) => {
-    items = Object.values(snap.val() || {}).sort((a, b) => Number(b.createdAt || 0) - Number(a.createdAt || 0));
-    renderGallery();
-  }, handleReadDenied);
+  await refreshWall();
+  refreshTimer = window.setInterval(() => {
+    refreshWall().catch((error) => {
+      console.warn(error);
+      renderUnavailable("Galerie expirée ou indisponible.");
+    });
+  }, 4000);
   window.setInterval(nextSlide, 5000);
 }
 
+async function refreshWall() {
+  const state = await getWallState(sessionId);
+  if (!state || isExpired(state)) return renderUnavailable("Galerie expirée ou indisponible.");
+  publicSession = state;
+  items = Array.isArray(state.gallery) ? state.gallery : [];
+  renderMetadata(publicSession);
+  renderGallery();
+}
+
 function renderUnavailable(message) {
+  window.clearInterval(refreshTimer);
   document.body.innerHTML = `<main class="wall-screen"><section class="access-card"><h1>PhotoboothLive</h1><p>${escapeHtml(message)}</p></section></main>`;
 }
 
@@ -72,5 +70,5 @@ function nextSlide() {
 
 boot().catch((error) => {
   console.warn(error);
-  renderUnavailable("Connexion à la galerie impossible.");
+  renderUnavailable("Galerie expirée ou indisponible.");
 });
