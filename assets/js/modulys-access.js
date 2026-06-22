@@ -227,7 +227,7 @@ function renderLoginRequired(moduleKey, reason) {
 }
 
 function renderBlocked(moduleKey, reason) {
-  if (reason === "not_authenticated") return renderLoginRequired(moduleKey, reason);
+  if (reason === "not_authenticated" || reason === "anonymous_not_allowed") return renderLoginRequired(moduleKey, reason);
   document.body.innerHTML = `<main class="access-screen"><section class="access-card"><p class="eyebrow">Modulys</p><h1>Accès non disponible</h1><p>${escapeHtml(reasonLabel(reason))}</p><a class="btn btn-primary" href="https://modulys.top/mes-modules.html">Retour à mes modules</a></section></main>`;
 }
 

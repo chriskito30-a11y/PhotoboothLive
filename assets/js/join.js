@@ -1,5 +1,5 @@
 import { app, db, functions, ref, get, httpsCallable } from "./firebase-config.js";
-import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-auth.js";
+import { getAuth, signInAnonymously, onAuthStateChanged, setPersistence, browserSessionPersistence } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-auth.js";
 import { $, escapeHtml, getSessionIdFromUrl, getPublicSession, isExpired, ROOT_PATH } from "./core.js";
 import { compressImage } from "./image-tools.js";
 
@@ -26,29 +26,46 @@ function setStatus(message = "", type = "") {
   el.className = `status ${type}`.trim();
 }
 
-function waitForUser() {
+function waitForUser(timeoutMs = 1800) {
   return new Promise((resolve) => {
-    const unsub = onAuthStateChanged(auth, (user) => {
-      unsub();
-      resolve(user);
-    });
+    let done = false;
+    let unsub = () => {};
+    const finish = (user) => {
+      if (done) return;
+      done = true;
+      try { unsub(); } catch {}
+      resolve(user || null);
+    };
+    unsub = onAuthStateChanged(auth, finish, () => finish(null));
+    window.setTimeout(() => finish(auth.currentUser || null), timeoutMs);
   });
 }
 
-async function ensureAnonUser() {
-  if (!auth.currentUser) {
-    try { await signInAnonymously(auth); } catch (error) {
-      throw new Error("L’envoi nécessite l’authentification anonyme Firebase. Activez-la dans Firebase Auth > Sign-in method.");
-    }
+async function ensureParticipantUser() {
+  // Important : au chargement, auth.currentUser peut être null pendant que Firebase restaure
+  // le vrai compte Modulys. Il ne faut donc pas créer une session anonyme immédiatement,
+  // sinon l'organisateur est remplacé par un invité sur tout le sous-domaine.
+  const existingUser = auth.currentUser || await waitForUser();
+  if (existingUser) {
+    participantId = existingUser.uid;
+    return existingUser;
   }
-  const user = auth.currentUser || await waitForUser();
-  participantId = user.uid;
-  return user;
+
+  try {
+    // Les invités anonymes restent limités à l'onglet/session du navigateur autant que possible,
+    // afin d'éviter de polluer la connexion organisateur sur PhotoboothLive.
+    await setPersistence(auth, browserSessionPersistence);
+    const credential = await signInAnonymously(auth);
+    participantId = credential.user.uid;
+    return credential.user;
+  } catch (error) {
+    throw new Error("L’envoi nécessite l’authentification anonyme Firebase. Activez-la dans Firebase Auth > Sign-in method.");
+  }
 }
 
 async function boot() {
   if (!sessionId) return renderUnavailable("Lien incomplet : session manquante.");
-  await ensureAnonUser();
+  await ensureParticipantUser();
   sessionData = await getPublicSession(sessionId);
   if (!sessionData) return renderUnavailable("Cette galerie n’existe pas ou n’est plus disponible.");
   if (isExpired(sessionData)) return renderUnavailable("Cette galerie est expirée. Les envois sont fermés.");
