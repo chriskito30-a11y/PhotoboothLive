@@ -1,4 +1,4 @@
-import { enforceModuleAccess, signOut } from "./modulys-access.js";
+import { enforceModuleAccess, logoutFromModule } from "./modulys-access.js";
 import { $, escapeHtml, createSession, MODULE_ID } from "./core.js";
 import { renderFreeLimitUpgrade, isFreeLimitError } from "./modulys-access.js";
 
@@ -67,5 +67,5 @@ $("#createForm")?.addEventListener("submit", async (event) => {
   }
 });
 
-$("#logoutBtn")?.addEventListener("click", () => signOut());
+$("#logoutBtn")?.addEventListener("click", () => logoutFromModule());
 boot();

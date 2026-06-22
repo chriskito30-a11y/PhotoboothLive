@@ -249,4 +249,12 @@ export async function enforceModuleAccess(moduleKey, options = {}) {
   }
 }
 
+export async function logoutFromModule(redirectUrl = "https://modulys.top/mes-modules.html") {
+  try {
+    await signOut(auth);
+  } finally {
+    window.location.href = redirectUrl;
+  }
+}
+
 export { auth, signOut };
