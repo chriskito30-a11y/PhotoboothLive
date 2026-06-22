@@ -129,6 +129,11 @@ $("#uploadForm")?.addEventListener("submit", async (event) => {
     const finalizeUpload = httpsCallable(functions, "finalizePhotoboothUpload");
     const result = await finalizeUpload({ sessionId, slotId: reservedSlotId, participantName: name, message, photoBase64 });
 
+    if (result.data?.alreadySubmitted) {
+      setStatus("Vous avez déjà envoyé une photo pour cette galerie. Une seule photo est autorisée par participant.", "error");
+      return;
+    }
+
     form.reset();
     $("#preview").hidden = true;
     selectedBlob = null;
