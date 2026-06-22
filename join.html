@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Envoyer une photo — PhotoboothLive</title>
+  <meta name="theme-color" content="#7c3aed">
+  <link rel="icon" href="assets/img/module-photoboothlive.svg" type="image/svg+xml">
+  <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link href="https://fonts.googleapis.com/css2?family=Inter:wght@500;650;700;800;900&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="assets/css/style.css">
+</head>
+<body>
+  <main class="join-shell"><section class="card join-card"><p class="eyebrow">PhotoboothLive</p><h1 id="title">Galerie photo</h1><p id="subtitle" class="lead">Partagez vos souvenirs</p><p id="welcomeMessage">Ajoutez votre photo et un petit message.</p>
+    <form id="uploadForm">
+      <div class="field"><label for="name">Votre prénom</label><input id="name" name="name" maxlength="80" autocomplete="given-name" required placeholder="Sophie"></div>
+      <div class="field"><label for="photoFile">Votre photo</label><input id="photoFile" name="photoFile" type="file" accept="image/*" required><p id="limitsText" class="help">Photo uniquement · compression automatique</p></div>
+      <img id="preview" class="preview" hidden alt="Aperçu de la photo compressée">
+      <div class="field"><label for="message">Petit message</label><textarea id="message" name="message" maxlength="180" placeholder="Super soirée !"></textarea></div>
+      <button class="btn btn-primary" type="submit">Envoyer ma photo</button>
+      <p id="status" class="status" role="status"></p>
+    </form>
+  </section></main>
+  <script type="module" src="assets/js/join.js"></script>
+</body>
+</html>

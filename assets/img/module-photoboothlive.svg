@@ -1,0 +1,35 @@
+<svg width="900" height="620" viewBox="0 0 900 620" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="900" height="620" rx="54" fill="url(#bg)"/>
+  <circle cx="738" cy="112" r="96" fill="#FBCFE8" opacity=".85"/>
+  <circle cx="122" cy="512" r="116" fill="#DDD6FE" opacity=".9"/>
+  <rect x="138" y="112" width="330" height="420" rx="44" fill="#111827" filter="url(#shadow)"/>
+  <rect x="158" y="136" width="290" height="372" rx="32" fill="white"/>
+  <rect x="188" y="178" width="230" height="140" rx="26" fill="url(#photo1)"/>
+  <circle cx="235" cy="224" r="28" fill="white" opacity=".65"/>
+  <path d="M202 290L260 245L302 278L335 252L406 318H202V290Z" fill="white" opacity=".72"/>
+  <rect x="188" y="344" width="130" height="18" rx="9" fill="#A78BFA"/>
+  <rect x="188" y="376" width="202" height="14" rx="7" fill="#E5E7EB"/>
+  <rect x="188" y="402" width="172" height="14" rx="7" fill="#E5E7EB"/>
+  <rect x="188" y="438" width="132" height="42" rx="21" fill="#7C3AED"/>
+  <rect x="512" y="124" width="220" height="160" rx="30" fill="white" filter="url(#soft)" transform="rotate(5 512 124)"/>
+  <rect x="534" y="153" width="176" height="92" rx="20" fill="url(#photo2)" transform="rotate(5 534 153)"/>
+  <rect x="550" y="258" width="110" height="14" rx="7" fill="#E9D5FF" transform="rotate(5 550 258)"/>
+  <rect x="564" y="316" width="226" height="164" rx="30" fill="white" filter="url(#soft)" transform="rotate(-7 564 316)"/>
+  <rect x="588" y="344" width="178" height="96" rx="20" fill="url(#photo3)" transform="rotate(-7 588 344)"/>
+  <rect x="604" y="456" width="130" height="14" rx="7" fill="#FBCFE8" transform="rotate(-7 604 456)"/>
+  <rect x="462" y="426" width="122" height="122" rx="28" fill="#111827" filter="url(#soft)"/>
+  <rect x="482" y="446" width="28" height="28" rx="6" fill="white"/>
+  <rect x="536" y="446" width="28" height="28" rx="6" fill="white"/>
+  <rect x="482" y="500" width="28" height="28" rx="6" fill="white"/>
+  <rect x="518" y="482" width="28" height="28" rx="6" fill="white"/>
+  <path d="M658 84C692 92 710 112 716 148" stroke="#7C3AED" stroke-width="15" stroke-linecap="round"/>
+  <path d="M695 80C734 100 754 132 758 172" stroke="#EC4899" stroke-width="15" stroke-linecap="round" opacity=".85"/>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="900" y2="620" gradientUnits="userSpaceOnUse"><stop stop-color="#FAE8FF"/><stop offset=".46" stop-color="#F8FAFC"/><stop offset="1" stop-color="#EDE9FE"/></linearGradient>
+    <linearGradient id="photo1" x1="188" y1="178" x2="418" y2="318" gradientUnits="userSpaceOnUse"><stop stop-color="#C4B5FD"/><stop offset="1" stop-color="#F9A8D4"/></linearGradient>
+    <linearGradient id="photo2" x1="534" y1="153" x2="710" y2="245" gradientUnits="userSpaceOnUse"><stop stop-color="#BAE6FD"/><stop offset="1" stop-color="#FDE68A"/></linearGradient>
+    <linearGradient id="photo3" x1="588" y1="344" x2="766" y2="440" gradientUnits="userSpaceOnUse"><stop stop-color="#BBF7D0"/><stop offset="1" stop-color="#FBCFE8"/></linearGradient>
+    <filter id="shadow" x="90" y="76" width="426" height="516" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB"><feDropShadow dx="0" dy="24" stdDeviation="24" flood-color="#111827" flood-opacity=".22"/></filter>
+    <filter id="soft" x="430" y="70" width="400" height="520" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB"><feDropShadow dx="0" dy="18" stdDeviation="18" flood-color="#111827" flood-opacity=".14"/></filter>
+  </defs>
+</svg>
