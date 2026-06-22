@@ -1,12 +1,6 @@
-<<<<<<< HEAD
 import { app, db, functions, ref, get, httpsCallable } from "./firebase-config.js";
 import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-auth.js";
 import { $, escapeHtml, getSessionIdFromUrl, getPublicSession, isExpired, ROOT_PATH } from "./core.js";
-=======
-import { app, db, storage, ref, get, set, storageRef, uploadBytes, getDownloadURL } from "./firebase-config.js";
-import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-auth.js";
-import { $, escapeHtml, getSessionIdFromUrl, isExpired, countObject, ROOT_PATH } from "./core.js";
->>>>>>> 16228d0d8b510496f3be0d8b7ce8f50394c9c595
 import { compressImage } from "./image-tools.js";
 
 const auth = getAuth(app);
@@ -15,7 +9,6 @@ let sessionData = null;
 let participantId = null;
 let selectedBlob = null;
 
-<<<<<<< HEAD
 async function blobToBase64(blob) {
   const bytes = new Uint8Array(await blob.arrayBuffer());
   let binary = "";
@@ -26,8 +19,6 @@ async function blobToBase64(blob) {
   return btoa(binary);
 }
 
-=======
->>>>>>> 16228d0d8b510496f3be0d8b7ce8f50394c9c595
 function setStatus(message = "", type = "") {
   const el = $("#status");
   if (!el) return;
@@ -58,12 +49,7 @@ async function ensureAnonUser() {
 async function boot() {
   if (!sessionId) return renderUnavailable("Lien incomplet : session manquante.");
   await ensureAnonUser();
-<<<<<<< HEAD
   sessionData = await getPublicSession(sessionId);
-=======
-  const snap = await get(ref(db, `${ROOT_PATH}/${sessionId}`));
-  sessionData = snap.val();
->>>>>>> 16228d0d8b510496f3be0d8b7ce8f50394c9c595
   if (!sessionData) return renderUnavailable("Cette galerie n’existe pas ou n’est plus disponible.");
   if (isExpired(sessionData)) return renderUnavailable("Cette galerie est expirée. Les envois sont fermés.");
   renderSession(sessionData);
@@ -80,42 +66,10 @@ function renderSession(session) {
   $("#limitsText").textContent = `1 photo par participant · ${Math.round(Number(session.config?.maxPhotoSizeBytes || 900000) / 1000)} Ko max après compression`;
 }
 
-<<<<<<< HEAD
 async function reserveSlot() {
   const reserve = httpsCallable(functions, "reservePhotoboothSlot");
   const result = await reserve({ sessionId });
   return String(result.data?.slotId || "");
-=======
-function slotId(n) {
-  return String(n).padStart(2, "0");
-}
-
-function shuffledSlots(limit) {
-  const max = Math.max(1, Math.min(Number(limit || 30), 75));
-  const arr = Array.from({ length: max }, (_, i) => slotId(i + 1));
-  for (let i = arr.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [arr[i], arr[j]] = [arr[j], arr[i]];
-  }
-  return arr;
-}
-
-async function reserveSlot(limit) {
-  const now = Date.now();
-  for (const id of shuffledSlots(limit)) {
-    try {
-      await set(ref(db, `${ROOT_PATH}/${sessionId}/slots/${id}`), {
-        id,
-        participantId,
-        createdAt: now
-      });
-      return id;
-    } catch (error) {
-      // Slot occupé ou refusé par les rules : on essaie le suivant.
-    }
-  }
-  throw new Error("La limite de participants est atteinte pour cette galerie.");
->>>>>>> 16228d0d8b510496f3be0d8b7ce8f50394c9c595
 }
 
 $("#photoFile")?.addEventListener("change", async (event) => {
@@ -146,7 +100,6 @@ $("#uploadForm")?.addEventListener("submit", async (event) => {
 
   try {
     setStatus("Vérification des limites…");
-<<<<<<< HEAD
     const session = await getPublicSession(sessionId);
     if (!session || isExpired(session)) throw new Error("La galerie est fermée.");
     const [participantSnap, writeSnap, gallerySnap] = await Promise.all([
@@ -175,57 +128,6 @@ $("#uploadForm")?.addEventListener("submit", async (event) => {
     selectedBlob = null;
     const status = result.data?.item?.status;
     setStatus(status === "approved" ? "Photo envoyée et publiée sur le mur." : "Photo envoyée. Elle apparaîtra après validation par l’organisateur.", "success");
-=======
-    const freshSnap = await get(ref(db, `${ROOT_PATH}/${sessionId}`));
-    const session = freshSnap.val();
-    if (!session || isExpired(session)) throw new Error("La galerie est fermée.");
-    if (session.publicWrites?.[participantId] || session.gallery?.[participantId]) throw new Error("Vous avez déjà envoyé une photo pour cette galerie.");
-
-    const now = Date.now();
-    const limit = Number(session.config?.participantsLimit || 30);
-    const existingParticipant = session.participants?.[participantId];
-    let reservedSlotId = existingParticipant?.slotId || "";
-
-    // Sécurité quota : on réserve une place numérotée avant tout upload Storage.
-    // Les rules RTDB n’autorisent que 30 slots en free et 75 en event_pass.
-    if (!reservedSlotId) {
-      reservedSlotId = await reserveSlot(limit);
-    }
-
-    await set(ref(db, `${ROOT_PATH}/${sessionId}/participants/${participantId}`), {
-      id: participantId,
-      slotId: reservedSlotId,
-      name,
-      joinedAt: existingParticipant?.joinedAt || now,
-      lastSeenAt: now
-    });
-
-    setStatus("Envoi de la photo…");
-    const path = `photoboothlive/${sessionId}/${participantId}/photo.jpg`;
-    const fileRef = storageRef(storage, path);
-    await uploadBytes(fileRef, selectedBlob, {
-      contentType: "image/jpeg",
-      customMetadata: { moduleId: "photoboothlive", sessionId, participantId, slotId: reservedSlotId }
-    });
-    const imageUrl = await getDownloadURL(fileRef);
-    const item = {
-      id: participantId,
-      slotId: reservedSlotId,
-      participantId,
-      participantName: name,
-      imageUrl,
-      storagePath: path,
-      message,
-      status: "pending",
-      createdAt: now
-    };
-
-    await set(ref(db, `${ROOT_PATH}/${sessionId}/publicWrites/${participantId}`), item);
-
-    form.reset();
-    $("#preview").hidden = true;
-    setStatus("Photo envoyée. Elle apparaîtra après validation par l’organisateur.", "success");
->>>>>>> 16228d0d8b510496f3be0d8b7ce8f50394c9c595
   } catch (error) {
     console.warn(error);
     const msg = String(error?.message || "");
@@ -237,11 +139,7 @@ $("#uploadForm")?.addEventListener("submit", async (event) => {
   }
 });
 
-<<<<<<< HEAD
 boot().catch((error) => {
   console.warn(error);
   renderUnavailable("Cette galerie est expirée ou indisponible.");
 });
-=======
-boot();
->>>>>>> 16228d0d8b510496f3be0d8b7ce8f50394c9c595

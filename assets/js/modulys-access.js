@@ -7,7 +7,6 @@ import {
 } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-auth.js";
 
 const auth = getAuth(app);
-<<<<<<< HEAD
 const DEFAULT_PLAN_LIMITS = {
   free: { eventsPerPeriod: 1, quotaPeriod: "month", participantsPerEvent: 30, photosPerParticipant: 1, maxPhotoSizeBytes: 900000, retentionHours: 24 },
   event_pass: { eventsPerPeriod: 1, quotaPeriod: "grant", participantsPerEvent: 100, photosPerParticipant: 1, maxPhotoSizeBytes: 1000000, retentionHours: 48 },
@@ -15,9 +14,6 @@ const DEFAULT_PLAN_LIMITS = {
   annual: { eventsPerPeriod: 250, quotaPeriod: "year", participantsPerEvent: 200, photosPerParticipant: 1, maxPhotoSizeBytes: 1000000, retentionHours: 72 },
   lifetime: { eventsPerPeriod: 300, quotaPeriod: "year", participantsPerEvent: 250, photosPerParticipant: 1, maxPhotoSizeBytes: 1000000, retentionHours: 72 }
 };
-=======
-const DEFAULT_FREE_LIMITS = { eventsPerMonth: 1, participantsPerEvent: 30 };
->>>>>>> 16228d0d8b510496f3be0d8b7ce8f50394c9c595
 
 function normalizeTimestamp(value) {
   if (value === null || value === undefined || value === "") return null;
@@ -51,7 +47,6 @@ export function currentBillingPeriod(date = new Date()) {
   return `${year}-${month}`;
 }
 
-<<<<<<< HEAD
 function currentBillingYear(date = new Date()) {
   return String(date.getFullYear());
 }
@@ -65,8 +60,6 @@ function entitlementGrantId(entitlement = {}) {
   return String(entitlement.grantId || entitlement.purchaseId || entitlement.id || "").trim();
 }
 
-=======
->>>>>>> 16228d0d8b510496f3be0d8b7ce8f50394c9c595
 export function waitForCurrentUser(timeoutMs = 1600) {
   return new Promise((resolve) => {
     let done = false;
@@ -82,7 +75,6 @@ export function waitForCurrentUser(timeoutMs = 1600) {
   });
 }
 
-<<<<<<< HEAD
 function resolveLimits(moduleKey, planId, moduleData = {}, planData = {}) {
   const normalizedPlanId = normalizePlanId(planId);
   const defaults = DEFAULT_PLAN_LIMITS[normalizedPlanId];
@@ -112,18 +104,6 @@ async function resolveBillingPeriod(planId, limits, entitlement = {}) {
   return String(periodSnap.val());
 }
 
-=======
-function resolveLimits(moduleKey, moduleData = {}, planData = {}) {
-  const moduleFree = moduleData?.limits?.free || {};
-  const planLimits = planData?.limits || {};
-  const perModule = planLimits?.[moduleKey] || {};
-  return {
-    eventsPerMonth: Number(moduleFree.eventsPerMonth || perModule.eventsPerMonth || planLimits.eventsPerMonth || DEFAULT_FREE_LIMITS.eventsPerMonth),
-    participantsPerEvent: Number(moduleFree.participantsPerEvent || perModule.participantsPerEvent || planLimits.participantsPerEvent || DEFAULT_FREE_LIMITS.participantsPerEvent)
-  };
-}
-
->>>>>>> 16228d0d8b510496f3be0d8b7ce8f50394c9c595
 export async function getAccessForUser(moduleKey, user) {
   const moduleSnap = await get(ref(db, `modules/${moduleKey}`));
   const moduleData = moduleSnap.val() || null;
@@ -134,26 +114,16 @@ export async function getAccessForUser(moduleKey, user) {
   if (!user) return { allowed: false, reason: "not_authenticated", module: moduleData };
   if (user.isAnonymous) return { allowed: false, reason: "anonymous_not_allowed", module: moduleData };
 
-<<<<<<< HEAD
   const [adminsSnap, adminSnap, accessSnap, subscriptionSnap] = await Promise.all([
     get(ref(db, `admins/${user.uid}`)),
     get(ref(db, `admin/${user.uid}`)),
     get(ref(db, `userAccess/${user.uid}`)),
     get(ref(db, `subscriptions/${user.uid}`))
-=======
-  const [adminsSnap, adminSnap, accessSnap, subscriptionSnap, freePlanSnap] = await Promise.all([
-    get(ref(db, `admins/${user.uid}`)),
-    get(ref(db, `admin/${user.uid}`)),
-    get(ref(db, `userAccess/${user.uid}`)),
-    get(ref(db, `subscriptions/${user.uid}`)),
-    get(ref(db, "plans/free"))
->>>>>>> 16228d0d8b510496f3be0d8b7ce8f50394c9c595
   ]);
 
   const isAdmin = Boolean(adminsSnap.val() || adminSnap.val());
   const access = accessSnap.val() || {};
   const subscription = subscriptionSnap.val() || null;
-<<<<<<< HEAD
   if (isAdmin) {
     const limits = { ...DEFAULT_PLAN_LIMITS.lifetime };
     return { allowed: true, reason: "admin", module: moduleData, isAdmin, access, subscription, planId: "admin", limits, billingPeriod: currentBillingYear(), entitlement: access, unlimited: true };
@@ -192,55 +162,16 @@ export async function getAccessForUser(moduleKey, user) {
 
 export function isFreeLimitError(error) {
   return Boolean(error && (["modulys/free-limit-reached", "modulys/offer-limit-reached"].includes(error.code) || String(error.message || "").toLowerCase().includes("limite de l’offre atteinte")));
-=======
-  const freePlan = freePlanSnap.val() || {};
-  const freeLimits = resolveLimits(moduleKey, moduleData, freePlan);
-  const accessPlanId = String(access.planId || "").toLowerCase();
-  const isFreePlan = !accessPlanId || accessPlanId === "free";
-
-  if (isAdmin) return { allowed: true, reason: "admin", module: moduleData, isAdmin, access, subscription, planId: "admin", limits: null, unlimited: true };
-  if (isActiveGrant(access.allModules)) {
-    return isFreePlan
-      ? { allowed: true, reason: "free_all_modules", module: moduleData, isAdmin, access, subscription, planId: "free", limits: freeLimits, unlimited: false }
-      : { allowed: true, reason: "all_modules", module: moduleData, isAdmin, access, subscription, planId: access.planId || "custom", limits: null, unlimited: true };
-  }
-  if (isActiveGrant(access.modules?.[moduleKey])) {
-    return isFreePlan
-      ? { allowed: true, reason: "free_module_grant", module: moduleData, isAdmin, access, subscription, planId: "free", limits: freeLimits, unlimited: false }
-      : { allowed: true, reason: "module_grant", module: moduleData, isAdmin, access, subscription, planId: access.planId || "custom", limits: null, unlimited: true };
-  }
-  if (isActiveGrant(subscription) && (subscription.scope === "allModules" || subscription.modules?.[moduleKey] === true)) {
-    const subscriptionPlanId = String(subscription.planId || subscription.id || "subscription").toLowerCase();
-    return subscriptionPlanId === "free"
-      ? { allowed: true, reason: "free_subscription", module: moduleData, isAdmin, access, subscription, planId: "free", limits: freeLimits, unlimited: false }
-      : { allowed: true, reason: "subscription", module: moduleData, isAdmin, access, subscription, planId: subscription.planId || "subscription", limits: null, unlimited: true };
-  }
-  if (moduleData.accessMode === "free_authenticated") {
-    return { allowed: true, reason: "free_authenticated", module: moduleData, isAdmin, access, subscription, planId: "free", limits: freeLimits, unlimited: false };
-  }
-  return { allowed: false, reason: "no_grant", module: moduleData, isAdmin, access, subscription, planId: "none", limits: freeLimits, unlimited: false };
-}
-
-export function isFreeLimitError(error) {
-  return Boolean(error && (error.code === "modulys/free-limit-reached" || String(error.message || "").toLowerCase().includes("limite gratuite atteinte")));
->>>>>>> 16228d0d8b510496f3be0d8b7ce8f50394c9c595
 }
 
 export function upgradeOfferHtml(moduleKey, error = {}) {
   const limits = error.limits || {};
   const period = error.period || currentBillingPeriod();
-<<<<<<< HEAD
   const max = Number(limits.eventsPerPeriod || 1);
   const offerName = escapeHtml(error.offerName || "Découverte");
   return `<div class="upgrade-box">
     <strong>Limite de l’offre atteinte</strong>
     <span>L’offre ${offerName} permet ${max} création${max > 1 ? "s" : ""} sur cette période pour PhotoboothLive. La limite est déjà utilisée pour ${escapeHtml(period)}.</span>
-=======
-  const max = Number(limits.eventsPerMonth || DEFAULT_FREE_LIMITS.eventsPerMonth || 1);
-  return `<div class="upgrade-box">
-    <strong>Limite gratuite atteinte</strong>
-    <span>Votre offre gratuite permet ${max} création${max > 1 ? "s" : ""} par mois pour PhotoboothLive. La limite est déjà utilisée pour ${escapeHtml(period)}.</span>
->>>>>>> 16228d0d8b510496f3be0d8b7ce8f50394c9c595
     <div class="upgrade-actions">
       <a class="btn btn-primary" href="https://modulys.top/#tarifs" target="_blank" rel="noopener">Voir les offres</a>
       <a class="btn btn-secondary" href="https://modulys.top/#contact" target="_blank" rel="noopener">Débloquer mon accès</a>
@@ -262,10 +193,7 @@ function reasonLabel(reason) {
     anonymous_not_allowed: "Vous utilisez actuellement une session invité. Connectez-vous avec votre vrai compte Modulys pour créer ou gérer une galerie.",
     module_not_declared: "PhotoboothLive n’est pas encore déclaré dans Firebase.",
     module_inactive: "PhotoboothLive est actuellement désactivé.",
-<<<<<<< HEAD
     plan_inactive: "L’offre associée à votre compte est actuellement désactivée.",
-=======
->>>>>>> 16228d0d8b510496f3be0d8b7ce8f50394c9c595
     no_grant: "Votre compte ne possède pas encore les droits pour ce module."
   }[reason] || "Accès non disponible.";
 }

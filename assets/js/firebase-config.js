@@ -8,7 +8,6 @@ import {
   get,
   remove,
   push,
-<<<<<<< HEAD
   child,
   query,
   orderByChild,
@@ -18,16 +17,6 @@ import {
   getFunctions,
   httpsCallable
 } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-functions.js";
-=======
-  child
-} from "https://www.gstatic.com/firebasejs/10.12.5/firebase-database.js";
-import {
-  getStorage,
-  ref as storageRef,
-  uploadBytes,
-  getDownloadURL
-} from "https://www.gstatic.com/firebasejs/10.12.5/firebase-storage.js";
->>>>>>> 16228d0d8b510496f3be0d8b7ce8f50394c9c595
 
 const firebaseConfig = {
   apiKey: "AIzaSyBRXQ1tLE-zyYWgEwF_HM21EM-ToAIZ1QM",
@@ -40,26 +29,14 @@ const firebaseConfig = {
 };
 
 export const FIREBASE_READY = true;
-<<<<<<< HEAD
 const app = initializeApp(firebaseConfig);
 const db = getDatabase(app);
 const functions = getFunctions(app, "europe-west1");
-=======
-export const STORAGE_BUCKET = "gs://impro-ead69.firebasestorage.app";
-
-const app = initializeApp(firebaseConfig);
-const db = getDatabase(app);
-const storage = getStorage(app, STORAGE_BUCKET);
->>>>>>> 16228d0d8b510496f3be0d8b7ce8f50394c9c595
 
 export {
   app,
   db,
-<<<<<<< HEAD
   functions,
-=======
-  storage,
->>>>>>> 16228d0d8b510496f3be0d8b7ce8f50394c9c595
   ref,
   set,
   update,
@@ -68,14 +45,8 @@ export {
   remove,
   push,
   child,
-<<<<<<< HEAD
   query,
   orderByChild,
   equalTo,
   httpsCallable
-=======
-  storageRef,
-  uploadBytes,
-  getDownloadURL
->>>>>>> 16228d0d8b510496f3be0d8b7ce8f50394c9c595
 };

@@ -1,12 +1,6 @@
-<<<<<<< HEAD
 import { db, ref, get, onValue, update } from "./firebase-config.js";
 import { enforceModuleAccess } from "./modulys-access.js";
 import { $, escapeHtml, formatDateTime, getSessionIdFromUrl, getPublicSession, publicUrl, qrUrl, isExpired, approvePhoto, rejectPhoto, MODULE_ID, ROOT_PATH } from "./core.js";
-=======
-import { db, ref, onValue, update } from "./firebase-config.js";
-import { enforceModuleAccess } from "./modulys-access.js";
-import { $, escapeHtml, formatDateTime, getSessionIdFromUrl, publicUrl, qrUrl, isExpired, galleryItems, approvePhoto, rejectPhoto, MODULE_ID, ROOT_PATH } from "./core.js";
->>>>>>> 16228d0d8b510496f3be0d8b7ce8f50394c9c595
 
 const sessionId = getSessionIdFromUrl();
 let sessionData = null;
@@ -27,7 +21,6 @@ async function boot() {
     document.body.innerHTML = `<main class="access-screen"><section class="access-card"><h1>Session introuvable</h1><a class="btn btn-primary" href="index.html">Retour</a></section></main>`;
     return;
   }
-<<<<<<< HEAD
   const base = `${ROOT_PATH}/${sessionId}`;
   const [ownerSnap, metadata, moderationSnap] = await Promise.all([
     get(ref(db, `${base}/ownerUid`)),
@@ -75,24 +68,6 @@ function renderUnavailable(title) {
 }
 
 function renderMetadata(session) {
-=======
-  onValue(ref(db, `${ROOT_PATH}/${sessionId}`), (snap) => {
-    const session = snap.val();
-    if (!session) {
-      document.body.innerHTML = `<main class="access-screen"><section class="access-card"><h1>Galerie introuvable</h1><a class="btn btn-primary" href="index.html">Retour</a></section></main>`;
-      return;
-    }
-    if (session.ownerUid !== currentUser.uid) {
-      document.body.innerHTML = `<main class="access-screen"><section class="access-card"><h1>Accès réservé à l’organisateur</h1><a class="btn btn-primary" href="index.html">Retour</a></section></main>`;
-      return;
-    }
-    sessionData = session;
-    render(session);
-  });
-}
-
-function render(session) {
->>>>>>> 16228d0d8b510496f3be0d8b7ce8f50394c9c595
   const join = publicUrl("join.html", sessionId);
   const wall = publicUrl("wall.html", sessionId);
   $("#title").textContent = session.config?.title || "PhotoboothLive";
@@ -104,7 +79,6 @@ function render(session) {
   $("#openJoin").href = join;
   $("#openWall").href = wall;
   $("#expiredBadge").hidden = !isExpired(session);
-<<<<<<< HEAD
 }
 
 function renderModeration(session) {
@@ -120,23 +94,6 @@ function renderModeration(session) {
 function renderGallery(session) {
   const gallery = Object.values(session.gallery || {}).sort((a, b) => Number(b.createdAt || 0) - Number(a.createdAt || 0));
   $("#photoCount").textContent = String(gallery.length);
-=======
-
-  const publicWrites = Object.values(session.publicWrites || {}).sort((a, b) => Number(b.createdAt || 0) - Number(a.createdAt || 0));
-  const pending = publicWrites.filter((item) => item.status !== "approved" && item.status !== "rejected");
-  $("#pendingCount").textContent = String(pending.length);
-  $("#photoCount").textContent = String(Object.keys(session.gallery || {}).length);
-  $("#participantsCount").textContent = String(Object.keys(session.participants || {}).length);
-
-  const moderation = $("#moderationList");
-  if (!publicWrites.length) {
-    moderation.innerHTML = `<article class="empty-card"><strong>Aucune photo reçue</strong><span>Partagez le QR code avec vos invités.</span></article>`;
-  } else {
-    moderation.innerHTML = publicWrites.map((item) => renderModerationItem(item, session.config?.moderationEnabled)).join("");
-  }
-
-  const gallery = galleryItems(session, false);
->>>>>>> 16228d0d8b510496f3be0d8b7ce8f50394c9c595
   const grid = $("#galleryGrid");
   grid.innerHTML = gallery.length ? gallery.map(renderGalleryItem).join("") : `<article class="empty-card"><strong>Galerie vide</strong><span>Les photos approuvées apparaîtront ici.</span></article>`;
 }
@@ -190,11 +147,8 @@ $("#saveConfig")?.addEventListener("click", async () => {
     "config/moderationEnabled": moderationEnabled,
     updatedAt: Date.now()
   });
-<<<<<<< HEAD
   sessionData.config.moderationEnabled = moderationEnabled;
   renderModeration(sessionData);
-=======
->>>>>>> 16228d0d8b510496f3be0d8b7ce8f50394c9c595
   setStatus("Paramètres enregistrés.", "success");
 });
 
