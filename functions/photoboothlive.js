@@ -515,3 +515,65 @@ export const finalizePhotoboothUpload = onCall(CALLABLE_OPTIONS, async (request)
     return { item: existingItem };
   });
 });
+
+
+function publicSessionPayload(sessionId, session, { includeGallery = false } = {}) {
+  const now = Date.now();
+  const expiresAt = Number(session?.expiresAt || session?.public?.expiresAt || session?.config?.expiresAt || 0);
+  if (!session || !Number.isFinite(expiresAt) || expiresAt <= now) {
+    throw new HttpsError("failed-precondition", "Galerie expirée ou indisponible.");
+  }
+
+  const config = session.public || {
+    title: session.config?.title || "PhotoboothLive",
+    subtitle: session.config?.subtitle || "Partagez vos souvenirs",
+    welcomeMessage: session.config?.welcomeMessage || "Ajoutez votre photo et un petit message.",
+    expiresAt,
+    participantsLimit: session.config?.participantsLimit,
+    maxPhotoSizeBytes: session.config?.maxPhotoSizeBytes,
+    retentionHours: session.config?.retentionHours,
+    storagePath: session.storagePath || session.config?.storagePath || ""
+  };
+
+  const payload = {
+    sessionId,
+    config,
+    expiresAt,
+    storagePath: String(session.storagePath || config.storagePath || "")
+  };
+
+  if (includeGallery) {
+    payload.gallery = Object.values(session.gallery || {})
+      .filter((item) => item && item.status === "approved" && typeof item.imageUrl === "string")
+      .map((item) => ({
+        id: String(item.id || ""),
+        participantId: String(item.participantId || ""),
+        participantName: cleanText(String(item.participantName || "Invité"), 80),
+        message: cleanText(String(item.message || ""), 180),
+        imageUrl: String(item.imageUrl || ""),
+        status: "approved",
+        createdAt: Number(item.createdAt || 0),
+        approvedAt: Number(item.approvedAt || 0)
+      }))
+      .sort((a, b) => Number(b.createdAt || 0) - Number(a.createdAt || 0))
+      .slice(0, 250);
+  }
+
+  return payload;
+}
+
+export const getPhotoboothPublicSession = onCall(CALLABLE_OPTIONS, async (request) => {
+  const sessionId = normalizeSlug(request.data?.sessionId, 48);
+  if (!sessionId) throw new HttpsError("invalid-argument", "Session invalide.");
+  const snap = await getDatabase().ref(`${SESSIONS_PATH}/${sessionId}`).get();
+  if (!snap.exists()) throw new HttpsError("not-found", "Galerie introuvable.");
+  return publicSessionPayload(sessionId, snap.val(), { includeGallery: false });
+});
+
+export const getPhotoboothWallState = onCall(CALLABLE_OPTIONS, async (request) => {
+  const sessionId = normalizeSlug(request.data?.sessionId, 48);
+  if (!sessionId) throw new HttpsError("invalid-argument", "Session invalide.");
+  const snap = await getDatabase().ref(`${SESSIONS_PATH}/${sessionId}`).get();
+  if (!snap.exists()) throw new HttpsError("not-found", "Galerie introuvable.");
+  return publicSessionPayload(sessionId, snap.val(), { includeGallery: true });
+});
