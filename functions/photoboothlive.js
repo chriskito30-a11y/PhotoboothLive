@@ -12,6 +12,7 @@ const MAX_EVENT_AHEAD_MS = 366 * 24 * 60 * 60 * 1000;
 const CREATION_LEASE_MS = 5 * 60 * 1000;
 const UPLOAD_LEASE_MS = 5 * 60 * 1000;
 const SLOT_RESERVATION_MS = 10 * 60 * 1000;
+const RESERVE_LEASE_MS = 10 * 1000;
 const CALLABLE_OPTIONS = { region: REGION, timeoutSeconds: 60, memory: "256MiB", maxInstances: 20 };
 
 function normalizeTimestamp(value) {
@@ -316,63 +317,63 @@ export const reservePhotoboothSlot = onCall(CALLABLE_OPTIONS, async (request) =>
   const participantId = requireSignedIn(request, { allowAnonymous: true });
   const sessionId = normalizeSlug(request.data?.sessionId, 48);
   if (!sessionId) throw new HttpsError("invalid-argument", "Session invalide.");
-  const sessionRef = getDatabase().ref(`${SESSIONS_PATH}/${sessionId}`);
-  let outcome = null;
-  let failure = "unavailable";
 
-  const result = await sessionRef.transaction((session) => {
-    outcome = null;
-    failure = "unavailable";
+  const db = getDatabase();
+  return withLease(db, `serverLocks/${MODULE_ID}/reserve/${sessionId}`, RESERVE_LEASE_MS, async () => {
+    const sessionRef = db.ref(`${SESSIONS_PATH}/${sessionId}`);
+    const snap = await sessionRef.get();
+    if (!snap.exists()) throw new HttpsError("not-found", "Galerie introuvable.");
+
+    const session = snap.val() || {};
     const now = Date.now();
-    if (!session || Number(session.expiresAt || 0) <= now) return;
-    const limit = Number(session.config?.participantsLimit || 0);
-    if (!Number.isSafeInteger(limit) || limit < 1 || limit > 250) return;
+    const expiresAt = Number(session.expiresAt || session.public?.expiresAt || session.config?.expiresAt || 0);
+    if (!Number.isFinite(expiresAt) || expiresAt <= now) {
+      throw new HttpsError("failed-precondition", "Galerie expirée.");
+    }
 
-    session.slots ||= {};
-    session.slotOwners ||= {};
-    const knownSlotId = session.slotOwners[participantId];
-    const knownSlot = knownSlotId ? session.slots[knownSlotId] : null;
+    const limit = Number(session.config?.participantsLimit || session.public?.participantsLimit || 0);
+    if (!Number.isSafeInteger(limit) || limit < 1 || limit > 250) {
+      throw new HttpsError("failed-precondition", "Configuration de galerie incomplète ou invalide.");
+    }
+
+    const slots = session.slots || {};
+    const slotOwners = session.slotOwners || {};
+    const knownSlotId = String(slotOwners[participantId] || "");
+    const knownSlot = knownSlotId ? slots[knownSlotId] : null;
+
     if (knownSlot?.participantId === participantId) {
       const reservationExpiresAt = Number(knownSlot.reservationExpiresAt || Number(knownSlot.createdAt || 0) + SLOT_RESERVATION_MS);
       if (isFinalizedSlot(session, knownSlot) || reservationExpiresAt > now) {
-        outcome = { slotId: knownSlotId };
-        return session;
+        return { slotId: knownSlotId };
       }
-      delete session.slots[knownSlotId];
-      delete session.slotOwners[participantId];
+    }
+
+    const updates = {};
+    if (knownSlotId) {
+      updates[`slots/${knownSlotId}`] = null;
+      updates[`slotOwners/${participantId}`] = null;
     }
 
     let slotId = "";
     for (let index = 1; index <= limit; index += 1) {
       const candidate = String(index).padStart(2, "0");
-      const slot = session.slots[candidate];
+      const slot = slots[candidate];
       const reservationExpiresAt = Number(slot?.reservationExpiresAt || Number(slot?.createdAt || 0) + SLOT_RESERVATION_MS);
       if (!slot || (!isFinalizedSlot(session, slot) && reservationExpiresAt <= now)) {
-        if (slot?.participantId) delete session.slotOwners[slot.participantId];
+        if (slot?.participantId) updates[`slotOwners/${slot.participantId}`] = null;
         slotId = candidate;
         break;
       }
     }
-    if (!slotId) {
-      failure = "capacity";
-      return;
-    }
 
-    session.slots[slotId] = { id: slotId, participantId, createdAt: now, reservationExpiresAt: now + SLOT_RESERVATION_MS };
-    session.slotOwners[participantId] = slotId;
-    session.updatedAt = now;
-    outcome = { slotId };
-    return session;
-  }, undefined, false);
+    if (!slotId) throw new HttpsError("resource-exhausted", "La limite de participants est atteinte.");
 
-  if (!result.committed || !outcome) {
-    if (failure === "capacity") throw new HttpsError("resource-exhausted", "La limite de participants est atteinte.");
-    if (failure === "missing") throw new HttpsError("not-found", "Galerie introuvable.");
-    if (failure === "expired") throw new HttpsError("failed-precondition", "Galerie expirée.");
-    if (failure === "invalid_config") throw new HttpsError("failed-precondition", "Configuration de galerie incomplète ou invalide.");
-    throw new HttpsError("failed-precondition", "Galerie expirée ou indisponible.");
-  }
-  return outcome;
+    updates[`slots/${slotId}`] = { id: slotId, participantId, createdAt: now, reservationExpiresAt: now + SLOT_RESERVATION_MS };
+    updates[`slotOwners/${participantId}`] = slotId;
+    updates.updatedAt = now;
+    await sessionRef.update(updates);
+    return { slotId };
+  });
 });
 
 export const finalizePhotoboothUpload = onCall(CALLABLE_OPTIONS, async (request) => {
