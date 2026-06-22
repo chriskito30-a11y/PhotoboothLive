@@ -1,4 +1,4 @@
-import { app, db, storage, ref, get, set, update, storageRef, uploadBytes, getDownloadURL } from "./firebase-config.js";
+import { app, db, storage, ref, get, set, storageRef, uploadBytes, getDownloadURL } from "./firebase-config.js";
 import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-auth.js";
 import { $, escapeHtml, getSessionIdFromUrl, isExpired, countObject, ROOT_PATH } from "./core.js";
 import { compressImage } from "./image-tools.js";
@@ -57,6 +57,37 @@ function renderSession(session) {
   $("#limitsText").textContent = `1 photo par participant · ${Math.round(Number(session.config?.maxPhotoSizeBytes || 900000) / 1000)} Ko max après compression`;
 }
 
+function slotId(n) {
+  return String(n).padStart(2, "0");
+}
+
+function shuffledSlots(limit) {
+  const max = Math.max(1, Math.min(Number(limit || 30), 75));
+  const arr = Array.from({ length: max }, (_, i) => slotId(i + 1));
+  for (let i = arr.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [arr[i], arr[j]] = [arr[j], arr[i]];
+  }
+  return arr;
+}
+
+async function reserveSlot(limit) {
+  const now = Date.now();
+  for (const id of shuffledSlots(limit)) {
+    try {
+      await set(ref(db, `${ROOT_PATH}/${sessionId}/slots/${id}`), {
+        id,
+        participantId,
+        createdAt: now
+      });
+      return id;
+    } catch (error) {
+      // Slot occupé ou refusé par les rules : on essaie le suivant.
+    }
+  }
+  throw new Error("La limite de participants est atteinte pour cette galerie.");
+}
+
 $("#photoFile")?.addEventListener("change", async (event) => {
   const file = event.target.files?.[0];
   selectedBlob = null;
@@ -88,21 +119,24 @@ $("#uploadForm")?.addEventListener("submit", async (event) => {
     const freshSnap = await get(ref(db, `${ROOT_PATH}/${sessionId}`));
     const session = freshSnap.val();
     if (!session || isExpired(session)) throw new Error("La galerie est fermée.");
-    const participantsCount = countObject(session.participants || {});
-    const limit = Number(session.config?.participantsLimit || 30);
-    const alreadyParticipant = Boolean(session.participants?.[participantId]);
-    if (!alreadyParticipant && participantsCount >= limit) throw new Error("La limite de participants est atteinte pour cette galerie.");
     if (session.publicWrites?.[participantId] || session.gallery?.[participantId]) throw new Error("Vous avez déjà envoyé une photo pour cette galerie.");
 
     const now = Date.now();
+    const limit = Number(session.config?.participantsLimit || 30);
+    const existingParticipant = session.participants?.[participantId];
+    let reservedSlotId = existingParticipant?.slotId || "";
 
-    // IMPORTANT QUOTA : on réserve d’abord le participant dans RTDB.
-    // Les règles RTDB peuvent compter les participants/photos, contrairement aux règles Storage.
-    // Si la limite 30 est atteinte, l’écriture échoue AVANT l’upload Storage : pas de fichier inutile.
+    // Sécurité quota : on réserve une place numérotée avant tout upload Storage.
+    // Les rules RTDB n’autorisent que 30 slots en free et 75 en event_pass.
+    if (!reservedSlotId) {
+      reservedSlotId = await reserveSlot(limit);
+    }
+
     await set(ref(db, `${ROOT_PATH}/${sessionId}/participants/${participantId}`), {
       id: participantId,
+      slotId: reservedSlotId,
       name,
-      joinedAt: session.participants?.[participantId]?.joinedAt || now,
+      joinedAt: existingParticipant?.joinedAt || now,
       lastSeenAt: now
     });
 
@@ -111,11 +145,12 @@ $("#uploadForm")?.addEventListener("submit", async (event) => {
     const fileRef = storageRef(storage, path);
     await uploadBytes(fileRef, selectedBlob, {
       contentType: "image/jpeg",
-      customMetadata: { moduleId: "photoboothlive", sessionId, participantId }
+      customMetadata: { moduleId: "photoboothlive", sessionId, participantId, slotId: reservedSlotId }
     });
     const imageUrl = await getDownloadURL(fileRef);
     const item = {
       id: participantId,
+      slotId: reservedSlotId,
       participantId,
       participantName: name,
       imageUrl,
@@ -125,7 +160,6 @@ $("#uploadForm")?.addEventListener("submit", async (event) => {
       createdAt: now
     };
 
-    // L’invité écrit uniquement sa soumission. L’organisateur seul approuve vers gallery.
     await set(ref(db, `${ROOT_PATH}/${sessionId}/publicWrites/${participantId}`), item);
 
     form.reset();
@@ -133,7 +167,12 @@ $("#uploadForm")?.addEventListener("submit", async (event) => {
     setStatus("Photo envoyée. Elle apparaîtra après validation par l’organisateur.", "success");
   } catch (error) {
     console.warn(error);
-    setStatus(error.message || "Envoi impossible.", "error");
+    const msg = String(error?.message || "");
+    if (msg.includes("PERMISSION_DENIED") || msg.includes("Permission denied")) {
+      setStatus("La limite de participants/photos est atteinte ou l’envoi n’est plus autorisé.", "error");
+    } else {
+      setStatus(error.message || "Envoi impossible.", "error");
+    }
   }
 });
 
