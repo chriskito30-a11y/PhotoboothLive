@@ -1,6 +1,6 @@
 import { app, db, functions, ref, get, httpsCallable } from "./firebase-config.js";
 import { getAuth, signInAnonymously, onAuthStateChanged, setPersistence, browserSessionPersistence } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-auth.js";
-import { $, escapeHtml, getSessionIdFromUrl, getPublicSession, isExpired, ROOT_PATH } from "./core.js";
+import { $, escapeHtml, getSessionIdFromUrl, getPublicSession, isExpired, ROOT_PATH, friendlyErrorMessage } from "./core.js";
 import { compressImage } from "./image-tools.js";
 
 const auth = getAuth(app);
@@ -42,9 +42,9 @@ function waitForUser(timeoutMs = 1800) {
 }
 
 async function ensureParticipantUser() {
-  // Important : au chargement, auth.currentUser peut être null pendant que Firebase restaure
-  // le vrai compte Modulys. Il ne faut donc pas créer une session anonyme immédiatement,
-  // sinon l'organisateur est remplacé par un invité sur tout le sous-domaine.
+  // Important : au chargement, le compte organisateur peut encore être en cours de restauration.
+  // Il ne faut donc pas créer un accès invité immédiatement, sinon l’organisateur peut être remplacé
+  // par un invité sur tout le sous-domaine.
   const existingUser = auth.currentUser || await waitForUser();
   if (existingUser) {
     participantId = existingUser.uid;
@@ -59,7 +59,7 @@ async function ensureParticipantUser() {
     participantId = credential.user.uid;
     return credential.user;
   } catch (error) {
-    throw new Error("L’envoi nécessite l’authentification anonyme Firebase. Activez-la dans Firebase Auth > Sign-in method.");
+    throw new Error("Connexion nécessaire. Veuillez réessayer ou contacter l’organisateur.");
   }
 }
 
@@ -103,7 +103,7 @@ $("#photoFile")?.addEventListener("change", async (event) => {
     $("#preview").hidden = false;
     setStatus(`Photo prête (${Math.round(selectedBlob.size / 1024)} Ko).`, "success");
   } catch (error) {
-    setStatus(error.message || "Photo impossible à compresser.", "error");
+    setStatus(friendlyErrorMessage(error, "Photo impossible à préparer."), "error");
   }
 });
 
@@ -121,7 +121,7 @@ $("#uploadForm")?.addEventListener("submit", async (event) => {
     if (!session || isExpired(session)) throw new Error("La galerie est fermée.");
 
     // P0 sécurisé : le navigateur ne lit/écrit plus les nœuds privés pour pré-vérifier.
-    // La réservation, l’anti-doublon et les quotas sont contrôlés par les Cloud Functions.
+    // La réservation, l’anti-doublon et les limites incluses sont contrôlés côté serveur.
     const reservedSlotId = await reserveSlot();
 
     setStatus("Envoi sécurisé de la photo…");
@@ -145,7 +145,7 @@ $("#uploadForm")?.addEventListener("submit", async (event) => {
     if (msg.includes("PERMISSION_DENIED") || msg.includes("Permission denied")) {
       setStatus("La limite de participants/photos est atteinte ou l’envoi n’est plus autorisé.", "error");
     } else {
-      setStatus(error.message || "Envoi impossible.", "error");
+      setStatus(friendlyErrorMessage(error, "Envoi impossible. Veuillez réessayer."), "error");
     }
   }
 });

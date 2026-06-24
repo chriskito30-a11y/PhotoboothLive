@@ -1,5 +1,5 @@
 import { enforceModuleAccess, logoutFromModule } from "./modulys-access.js";
-import { $, escapeHtml, createSession, MODULE_ID } from "./core.js";
+import { $, escapeHtml, createSession, MODULE_ID, friendlyErrorMessage } from "./core.js";
 import { renderFreeLimitUpgrade, isFreeLimitError } from "./modulys-access.js";
 
 let currentUser = null;
@@ -18,7 +18,7 @@ async function boot() {
   currentUser = result.user;
   currentAccess = result.access;
   $("#userEmail").textContent = currentUser?.email || "Compte connecté";
-  $("#planLabel").textContent = currentAccess?.plan?.name || (currentAccess?.unlimited ? "Administrateur" : currentAccess?.planId || "Gratuit");
+  $("#planLabel").textContent = currentAccess?.plan?.name || (currentAccess?.unlimited ? "Administrateur" : "Offre Découverte");
 
   loadSessions();
 }
@@ -63,7 +63,7 @@ $("#createForm")?.addEventListener("submit", async (event) => {
       setStatus("", "");
       return;
     }
-    setStatus(error.message || "Impossible de créer la galerie.", "error");
+    setStatus(friendlyErrorMessage(error, "Impossible de créer la galerie."), "error");
   }
 });
 

@@ -1,6 +1,6 @@
 import { db, ref, get, onValue, update } from "./firebase-config.js";
 import { enforceModuleAccess } from "./modulys-access.js";
-import { $, escapeHtml, formatDateTime, getSessionIdFromUrl, getPublicSession, publicUrl, qrUrl, isExpired, approvePhoto, rejectPhoto, MODULE_ID, ROOT_PATH } from "./core.js";
+import { $, escapeHtml, formatDateTime, getSessionIdFromUrl, getPublicSession, publicUrl, qrUrl, isExpired, approvePhoto, rejectPhoto, MODULE_ID, ROOT_PATH, friendlyErrorMessage } from "./core.js";
 
 const sessionId = getSessionIdFromUrl();
 let sessionData = null;
@@ -128,7 +128,7 @@ document.addEventListener("click", async (event) => {
     if (approveId) await approvePhoto(sessionId, item);
     if (rejectId) await rejectPhoto(sessionId, rejectId);
   } catch (error) {
-    setStatus(error.message || "Action impossible.", "error");
+    setStatus(friendlyErrorMessage(error, "Action impossible."), "error");
   }
 });
 

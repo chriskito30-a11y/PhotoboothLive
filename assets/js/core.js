@@ -2,6 +2,17 @@ import { db, functions, ref, get, update, httpsCallable } from "./firebase-confi
 
 export const MODULE_ID = "photoboothlive";
 export const ROOT_PATH = `moduleData/${MODULE_ID}/sessions`;
+function offerLabelFromPlanId(value = "") {
+  const id = String(value || "").toLowerCase();
+  if (id === "free") return "Offre Découverte";
+  if (id === "event_pass") return "Pass événement";
+  if (id === "monthly") return "Abonnement mensuel";
+  if (id === "annual") return "Abonnement annuel";
+  if (id === "lifetime") return "Lifetime";
+  if (id === "admin") return "Administrateur";
+  return value || "Offre Découverte";
+}
+
 export const DEFAULT_FREE_LIMITS = {
   eventsPerPeriod: 1,
   quotaPeriod: "month",
@@ -13,6 +24,17 @@ export const DEFAULT_FREE_LIMITS = {
 
 export function $(selector, root = document) { return root.querySelector(selector); }
 export function $all(selector, root = document) { return Array.from(root.querySelectorAll(selector)); }
+
+export function friendlyErrorMessage(error, fallback = "Une erreur est survenue, veuillez réessayer.") {
+  const raw = String(error?.message || "");
+  const code = String(error?.code || "").toLowerCase();
+  if (code.includes("permission-denied") || /permission_denied|permission denied|missing or insufficient/i.test(raw)) return "Accès non autorisé.";
+  if (code.includes("unauthenticated")) return "Connexion nécessaire.";
+  if (code.includes("not-found")) return "Session introuvable.";
+  if (code.includes("resource-exhausted") || /limite de l’offre|limite de participants|participants\/photos/i.test(raw)) return raw || "Limite de l’offre atteinte.";
+  const technical = /firebase|cloud functions|internal|bad request|cannot read properties|undefined|null|storage rules|quota/i.test(raw);
+  return technical ? fallback : (raw || fallback);
+}
 
 export function escapeHtml(value = "") {
   return String(value ?? "")
@@ -118,7 +140,7 @@ function offerLimitError({ access, limits, period }) {
   error.code = "modulys/offer-limit-reached";
   error.period = period;
   error.limits = limits;
-  error.offerName = access?.plan?.name || access?.planId || "Découverte";
+  error.offerName = access?.plan?.name || offerLabelFromPlanId(access?.planId);
   return error;
 }
 
