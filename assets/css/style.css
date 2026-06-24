@@ -118,3 +118,19 @@ input:focus, textarea:focus { outline: 3px solid rgba(124,58,237,.18); border-co
 
 /* P0 mobile safety */
 html,body{max-width:100%;overflow-x:hidden}.container,.access-card,.join-card,.card{min-width:0;overflow-wrap:anywhere}.participant-screen,.access-screen{padding:max(14px,env(safe-area-inset-top)) max(14px,env(safe-area-inset-right)) max(14px,env(safe-area-inset-bottom)) max(14px,env(safe-area-inset-left))}.dashboard-head,.session-card,.link-row{min-width:0}.link-row input{min-width:0}.btn{white-space:normal;text-align:center}img,video,canvas{max-width:100%;height:auto}@media(max-width:430px){.container{width:min(100% - 20px,1120px)}.card,.access-card{border-radius:20px;padding:18px}.dashboard-head{align-items:stretch;flex-direction:column}.stat-grid{grid-template-columns:1fr}.link-row{grid-template-columns:1fr}.btn{width:100%}}
+
+
+/* P1 — structure commune Modulys */
+.suite-home-section { display: grid; gap: 18px; margin-top: 32px; }
+.suite-steps-grid { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 14px; }
+.suite-steps-grid article { display: grid; gap: 6px; padding: 18px; border: 1px solid var(--line); border-radius: 18px; background: rgba(255,255,255,.88); box-shadow: 0 10px 30px rgba(15,23,42,.06); }
+.suite-steps-grid strong { color: var(--primary); }
+.suite-steps-grid span { color: var(--muted); line-height: 1.55; }
+.suite-info-grid { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 18px; }
+.demo-hero { margin-top: clamp(28px,5vw,72px); }
+.suite-demo-screen { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 14px; margin: 18px 0; }
+.suite-demo-screen > div { display: grid; gap: 6px; padding: 18px; border: 1px solid var(--line); border-radius: 18px; background: rgba(255,255,255,.88); }
+.suite-demo-screen strong { color: var(--primary); }
+.suite-cta-row, .suite-actions { display: flex; flex-wrap: wrap; gap: 12px; }
+.suite-demo-grid { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 18px; margin-top: 18px; }
+@media(max-width:860px){.suite-steps-grid,.suite-info-grid,.suite-demo-screen{grid-template-columns:1fr}.suite-cta-row,.suite-actions{display:grid;grid-template-columns:1fr}.suite-cta-row > *,.suite-actions > *{width:100%}}
